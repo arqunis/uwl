@@ -1,0 +1,6 @@
+[package]
+name = "uwl"
+version = "0.1.0"
+authors = ["acdenisSK <acdenissk69@gmail.com>"]
+
+[dependencies]
