@@ -163,6 +163,7 @@ impl<'a> StringStream<'a> {
         Some((self.offset, find_end(self.src, self.offset)?))
     }
 
+    #[inline]
     fn update_info(&mut self, s: &str) {
         if s == "\n" {
             self.line += 1;
