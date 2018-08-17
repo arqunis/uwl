@@ -237,6 +237,51 @@ impl<'a> StringStream<'a> {
             return None;
         }
 
+        let (_, c) = self.peek_internal(ahead);
+
+        Some(c)
+    }
+
+    /// Lookahead by x chars. Returns a substring up to the end it landed on.
+    /// This does not actually modify the order, it just needs to temporarily advance.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("hello world");
+    ///
+    /// assert_eq!(stream.current(), Some("h"));
+    /// assert_eq!(stream.peek_str(5), "hello");
+    ///
+    /// for _ in 0..5 {
+    ///     stream.next();
+    /// }
+    ///
+    /// assert_eq!(stream.next(), Some(" "));
+    /// assert_eq!(stream.peek_str(5), "world");
+    /// assert_eq!(stream.next(), Some("w"));
+    /// assert_eq!(stream.next(), Some("o"));
+    /// assert_eq!(stream.next(), Some("r"));
+    /// assert_eq!(stream.next(), Some("l"));
+    /// assert_eq!(stream.next(), Some("d"));
+    /// ```
+    pub fn peek_str(&mut self, ahead: usize) -> &'a str {
+        if self.at_end() {
+            return "";
+        }
+
+        let (s, _) = self.peek_internal(ahead);
+
+        s
+    }
+
+    fn peek_internal(&mut self, ahead: usize) -> (&'a str, &'a str) {
+        if self.at_end() {
+            return ("", "");
+        }
+
         let pos = self.offset;
         let column = self.column;
         let line = self.line;
@@ -245,13 +290,14 @@ impl<'a> StringStream<'a> {
             self.next();
         }
 
-        let c = self.current();
+        let s = &self.src[pos..self.offset];
+        let c = self.current().unwrap_or("");
 
         unsafe { self.set_unchecked(pos) };
         self.column = column;
         self.line = line;
 
-        c
+        (s, c)
     }
 
     /// Consume while true.
