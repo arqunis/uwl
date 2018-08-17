@@ -81,12 +81,15 @@
 ///
 /// [`char`]: https://doc.rust-lang.org/stable/std/primitive.char.html
 pub trait StrExt {
+    /// Does the string consist of numbers? (0-9)
     fn is_numeric(&self) -> bool;
-    fn is_alphanumeric(&self) -> bool;
+    /// Does the string consist of letters? (A-Z)
     fn is_alphabetic(&self) -> bool;
+    /// Does the string consist of letters or numbers? (A-Z; 0-9)
+    fn is_alphanumeric(&self) -> bool;
+    /// Does the string consist of whitespace? (\n; \r; ' ')
     fn is_whitespace(&self) -> bool;
-
-    /// Is digit or letter? (or an underscore)
+    /// Does the string consist of letters, numbers or underscores? (A-Z; 0-9; _)
     fn is_diglet(&self) -> bool;
 }
 
