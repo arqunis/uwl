@@ -139,12 +139,16 @@ fn find_end(s: &str, i: usize) -> Option<usize> {
 #[derive(Debug, Clone)]
 pub struct StringStream<'a> {
     offset: usize,
+    /// The source this stream operates on.
     pub src: &'a str,
+    /// Current line.
     pub line: usize,
+    /// Current column.
     pub column: usize,
 }
 
 impl<'a> StringStream<'a> {
+    /// Create a new stream from a source.
     pub fn new(src: &'a str) -> Self {
         StringStream {
             src,
