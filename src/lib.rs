@@ -311,7 +311,7 @@ impl<'a> StringStream<'a> {
     /// ```rust
     /// use uwl::StringStream;
     ///
-    /// // Import a few uitlity methods
+    /// // Import a few utility methods (for `is_alphabetic`)
     /// use uwl::StrExt;
     ///
     /// let mut stream = StringStream::new("hello");
