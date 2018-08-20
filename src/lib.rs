@@ -1,5 +1,6 @@
-//! A stream of chars that's useful for building a by-hand lexer that avoids manually handling unicode,
-//! and provides utilities to make the lexer code simple, easier to write, and understand.
+//! A stream of chars for building such as a lexer. Making the step of "iteration between characters" considerably easier.
+//! And providing certain utilites for making the code simpler.
+//! Respects both ASCII and Unicode.
 //!
 //! Example, lexing identifiers, numbers and some punctuation marks:
 //!
@@ -135,7 +136,9 @@ fn find_end(s: &str, i: usize) -> Option<usize> {
 /// A stream of chars. Handles both ASCII and Unicode.
 ///
 /// # Note
-/// "chars" are returned as `&str` in order to mitigate hacky conversion to `char`.
+/// This stream returns *chars* as `&str`s. In instances like [`take_while`], the `&str` refers to actual multi-char substrings (e.g "foo").
+///
+/// [`take_while`]: #method.take_while
 #[derive(Debug, Clone)]
 pub struct StringStream<'a> {
     offset: usize,
