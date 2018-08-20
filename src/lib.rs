@@ -152,6 +152,7 @@ pub struct StringStream<'a> {
 
 impl<'a> StringStream<'a> {
     /// Create a new stream from a source.
+    #[inline]
     pub fn new(src: &'a str) -> Self {
         StringStream {
             src,
