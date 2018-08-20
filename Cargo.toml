@@ -1,7 +1,7 @@
 [package]
 name = "uwl"
 version = "0.1.0"
-authors = ["acdenisSK <acdenissk69@gmail.com>"]
+authors = ["Alex M. M. <acdenissk69@gmail.com>"]
 description = "Unicode-aware stream of characters"
 repository = "https://github.com/acdenisSK/uwl"
 license = "MIT"
