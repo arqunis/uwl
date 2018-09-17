@@ -367,6 +367,22 @@ impl<'a> StringStream<'a> {
         self.take_while(|s| !f(s))
     }
 
+    /// Returns the remainder (after the offset).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("foo bar");
+    ///
+    /// assert_eq!(stream.take_until(|s| s == " "), "foo");
+    /// assert_eq!(stream.next(), Some(" "));
+    /// assert_eq!(stream.rest(), "bar");
+    pub fn rest(&self) -> &'a str {
+        &self.src[self.offset()..]
+    }
+
     /// Determines the end of the input.
     ///
     /// # Example
