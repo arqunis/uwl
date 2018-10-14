@@ -224,6 +224,32 @@ impl<'a> StringStream<'a> {
         Some(s)
     }
 
+    /// Advance if the leading string matches to the expected input.
+    /// Returns `true` on succession, `false` on failure.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("hello world");
+    ///
+    /// assert!(stream.eat("hello"));
+    /// assert!(!stream.eat("not a space"));
+    /// assert!(stream.eat(" "));
+    /// assert_eq!(stream.rest(), "world");
+    /// ```
+    #[inline]
+    pub fn eat(&mut self, m: &str) -> bool {
+        if self.peek_str(m.len()) == m {
+            self.offset += m.len();
+
+            true
+        } else {
+            false
+        }
+    }
+
     /// Lookahead by x chars. Returns the char it landed on.
     /// This does not actually modify the order, it just needs to temporarily advance.
     ///
@@ -240,6 +266,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.peek(2), Some("l"));
     /// assert_eq!(stream.current(), Some("h"));
     /// ```
+    #[inline]
     pub fn peek(&mut self, ahead: usize) -> Option<&'a str> {
         if self.at_end() {
             return None;
@@ -275,6 +302,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.next(), Some("l"));
     /// assert_eq!(stream.next(), Some("d"));
     /// ```
+    #[inline]
     pub fn peek_str(&mut self, ahead: usize) -> &'a str {
         if self.at_end() {
             return "";
@@ -301,7 +329,7 @@ impl<'a> StringStream<'a> {
         let s = &self.src[pos..self.offset];
         let c = self.current().unwrap_or("");
 
-        unsafe { self.set_unchecked(pos) };
+        self.offset = pos;
         self.column = column;
         self.line = line;
 
@@ -379,6 +407,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.take_until(|s| s == " "), "foo");
     /// assert_eq!(stream.next(), Some(" "));
     /// assert_eq!(stream.rest(), "bar");
+    #[inline]
     pub fn rest(&self) -> &'a str {
         &self.src[self.offset()..]
     }
