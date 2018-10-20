@@ -224,6 +224,36 @@ impl<'a> StringStream<'a> {
         Some(s)
     }
 
+    /// Advance by x chars.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("hello world");
+    ///
+    /// assert_eq!(stream.advance(5), Some("hello"));
+    /// stream.next();
+    /// assert_eq!(stream.advance(5), Some("world"));
+    /// assert!(stream.at_end());
+    /// ```
+    pub fn advance(&mut self, much: usize) -> Option<&'a str> {
+        if self.at_end() {
+            None
+        } else {
+            let start = self.offset;
+
+            for _ in 0..much {
+                self.next();
+            }
+
+            let m = &self.src[start..self.offset];
+
+            Some(m)
+        }
+    }
+
     /// Advance if the leading string matches to the expected input.
     /// Returns `true` on succession, `false` on failure.
     ///
@@ -241,8 +271,8 @@ impl<'a> StringStream<'a> {
     /// ```
     #[inline]
     pub fn eat(&mut self, m: &str) -> bool {
-        if self.peek_str(m.len()) == m {
-            self.offset += m.len();
+        if self.peek_for(m.len()) == m {
+            self.advance(m.len());
 
             true
         } else {
@@ -251,7 +281,7 @@ impl<'a> StringStream<'a> {
     }
 
     /// Lookahead by x chars. Returns the char it landed on.
-    /// This does not actually modify the order, it just needs to temporarily advance.
+    /// This does not actually modify, it just needs to temporarily advance.
     ///
     /// # Example
     ///
@@ -274,11 +304,11 @@ impl<'a> StringStream<'a> {
 
         let (_, c) = self.peek_internal(ahead);
 
-        Some(c)
+        Some(c?)
     }
 
     /// Lookahead by x chars. Returns a substring up to the end it landed on.
-    /// This does not actually modify the order, it just needs to temporarily advance.
+    /// This does not actually modify, it just needs to temporarily advance.
     ///
     /// # Example
     ///
@@ -288,14 +318,14 @@ impl<'a> StringStream<'a> {
     /// let mut stream = StringStream::new("hello world");
     ///
     /// assert_eq!(stream.current(), Some("h"));
-    /// assert_eq!(stream.peek_str(5), "hello");
+    /// assert_eq!(stream.peek_for(5), "hello");
     ///
     /// for _ in 0..5 {
     ///     stream.next();
     /// }
     ///
     /// assert_eq!(stream.next(), Some(" "));
-    /// assert_eq!(stream.peek_str(5), "world");
+    /// assert_eq!(stream.peek_for(5), "world");
     /// assert_eq!(stream.next(), Some("w"));
     /// assert_eq!(stream.next(), Some("o"));
     /// assert_eq!(stream.next(), Some("r"));
@@ -303,7 +333,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.next(), Some("d"));
     /// ```
     #[inline]
-    pub fn peek_str(&mut self, ahead: usize) -> &'a str {
+    pub fn peek_for(&mut self, ahead: usize) -> &'a str {
         if self.at_end() {
             return "";
         }
@@ -313,9 +343,22 @@ impl<'a> StringStream<'a> {
         s
     }
 
-    fn peek_internal(&mut self, ahead: usize) -> (&'a str, &'a str) {
+    /// Lookahead by x chars. Returns a substring up to the end it landed on.
+    /// This does not actually modify, it just needs to temporarily advance.
+    ///
+    /// # Deprecated
+    /// Use [`peek_for`] instead.
+    ///
+    /// [`peek_for`]: #method.peek_for
+    #[inline]
+    #[deprecated(note = "renamed to `peek_for`", since = "0.1.3")]
+    pub fn peek_str(&mut self, ahead: usize) -> &'a str {
+        self.peek_for(ahead)
+    }
+
+    fn peek_internal(&mut self, ahead: usize) -> (&'a str, Option<&'a str>) {
         if self.at_end() {
-            return ("", "");
+            return ("", None);
         }
 
         let pos = self.offset;
@@ -327,7 +370,7 @@ impl<'a> StringStream<'a> {
         }
 
         let s = &self.src[pos..self.offset];
-        let c = self.current().unwrap_or("");
+        let c = self.current();
 
         self.offset = pos;
         self.column = column;
