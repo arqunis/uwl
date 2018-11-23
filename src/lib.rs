@@ -144,10 +144,6 @@ pub struct StringStream<'a> {
     offset: usize,
     /// The source this stream operates on.
     pub src: &'a str,
-    /// Current line.
-    pub line: usize,
-    /// Current column.
-    pub column: usize,
 }
 
 impl<'a> StringStream<'a> {
@@ -157,8 +153,6 @@ impl<'a> StringStream<'a> {
         StringStream {
             src,
             offset: 0,
-            line: 1,
-            column: 0,
         }
     }
 
@@ -169,16 +163,6 @@ impl<'a> StringStream<'a> {
         }
 
         Some((self.offset, find_end(self.src, self.offset)?))
-    }
-
-    #[inline]
-    fn update_info(&mut self, s: &str) {
-        if s == "\n" {
-            self.line += 1;
-            self.column = 0;
-        } else {
-            self.column += s.len();
-        }
     }
 
     /// Fetch the current char.
@@ -213,12 +197,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.current(), Some("e"));
     /// ```
     pub fn next(&mut self) -> Option<&'a str> {
-        let (start, end) = self.char_pos()?;
-
-        let s = &self.src[start..end];
-
-        self.update_info(s);
-
+        let s = self.current()?;
         self.offset += s.len();
 
         Some(s)
@@ -242,15 +221,10 @@ impl<'a> StringStream<'a> {
         if self.at_end() {
             None
         } else {
-            let start = self.offset;
+            let s = self.peek_for(much);
+            self.offset += s.len();
 
-            for _ in 0..much {
-                self.next();
-            }
-
-            let m = &self.src[start..self.offset];
-
-            Some(m)
+            Some(s)
         }
     }
 
@@ -272,7 +246,7 @@ impl<'a> StringStream<'a> {
     #[inline]
     pub fn eat(&mut self, m: &str) -> bool {
         if self.peek_for(m.len()) == m {
-            self.advance(m.len());
+            self.offset += m.len();
 
             true
         } else {
@@ -304,7 +278,7 @@ impl<'a> StringStream<'a> {
 
         let (_, c) = self.peek_internal(ahead);
 
-        Some(c?)
+        c
     }
 
     /// Lookahead by x chars. Returns a substring up to the end it landed on.
@@ -362,8 +336,6 @@ impl<'a> StringStream<'a> {
         }
 
         let pos = self.offset;
-        let column = self.column;
-        let line = self.line;
 
         for _ in 0..ahead {
             self.next();
@@ -373,8 +345,6 @@ impl<'a> StringStream<'a> {
         let c = self.current();
 
         self.offset = pos;
-        self.column = column;
-        self.line = line;
 
         (s, c)
     }
@@ -406,8 +376,6 @@ impl<'a> StringStream<'a> {
         let mut s = self.current().unwrap();
 
         while !self.at_end() && f(s) {
-            self.update_info(s);
-
             self.offset += s.len();
 
             if self.at_end() {
