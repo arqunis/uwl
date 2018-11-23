@@ -95,22 +95,27 @@ pub trait StrExt {
 }
 
 impl<T: AsRef<str>> StrExt for T {
+    #[inline]
     fn is_numeric(&self) -> bool {
         self.as_ref().chars().all(|c| c.is_numeric())
     }
 
+    #[inline]
     fn is_alphanumeric(&self) -> bool {
         self.as_ref().chars().all(|c| c.is_alphanumeric())
     }
 
+    #[inline]
     fn is_alphabetic(&self) -> bool {
         self.as_ref().chars().all(|c| c.is_alphabetic())
     }
 
+    #[inline]
     fn is_whitespace(&self) -> bool {
         self.as_ref().chars().all(|c| c.is_whitespace())
     }
 
+    #[inline]
     fn is_diglet(&self) -> bool {
         self.as_ref()
             .chars()
