@@ -155,10 +155,7 @@ impl<'a> StringStream<'a> {
     /// Create a new stream from a source.
     #[inline]
     pub fn new(src: &'a str) -> Self {
-        StringStream {
-            src,
-            offset: 0,
-        }
+        StringStream { src, offset: 0 }
     }
 
     // Find the bound positions of a character, whether ASCII or Unicode.
@@ -411,6 +408,116 @@ impl<'a> StringStream<'a> {
         self.take_while(|s| !f(s))
     }
 
+    /// Slice a portion from the stream by using rules defined by the formatting string
+    ///
+    /// - `{}` => the portion to return
+    /// - `(x)` => optional text *x* that may be present, ignored
+    /// - letters/numbers => text to expect
+    ///
+    /// To espace `{` or `(`, use them twice. For example, `((`/`{{`.
+    /// This is not necessary for `}` or `)`.
+    ///
+    /// Whitespace between `{` and `}` is skipped.
+    ///
+    /// # Note
+    ///
+    /// This allocates a buffer for saving actions to perform (expect text? is this optional? should this be returned?)
+    ///
+    /// # Examples
+    ///
+    /// Get anything between html `h1` tags
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("<h1>hello world!</h1>");
+    ///
+    /// assert_eq!(stream.parse("<h1>{}</h1>"), Ok("hello world!"));
+    /// ```
+    ///
+    /// Parse html tags
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("<h2></h2>");
+    ///
+    /// // the opening tag - <h2>
+    /// assert_eq!(stream.parse("<(/){}>"), Ok("h2"));
+    /// // the closing tag - </h2>
+    /// assert_eq!(stream.parse("<(/){}>"), Ok("h2"));
+    /// ```
+    pub fn parse(&mut self, fmt: &str) -> Result<&'a str, String> {
+        enum Format<'a> {
+            Expect(&'a str),
+            Optional(&'a str),
+            Parse {
+                up_to: &'a str,
+                to_end: bool,
+            },
+        }
+
+        let mut formats = Vec::with_capacity(10);
+        let mut s = StringStream::new(fmt);
+
+        while !s.at_end() {
+            let e = s.take_until(|s| s == "{" || s == "(");
+            formats.push(Format::Expect(e));
+
+            let c = match s.next() {
+                Some(c) => c,
+                None => break,
+            };
+
+            if c == "(" {
+                if s.eat("(") {
+                    formats.push(Format::Expect("("));
+                    continue;
+                }
+
+                let e = s.take_until(|s| s == ")");
+
+                s.eat(")");
+
+                formats.push(Format::Optional(e));
+            } else if c == "{" {
+                if s.eat("{") {
+                    formats.push(Format::Expect("{"));
+                    continue;
+                }
+
+                s.take_while(|s| s.is_whitespace());
+                s.eat("}");
+
+                let c = s.current();
+                let to_end = c.is_none();
+                formats.push(Format::Parse { up_to: c.unwrap_or(""), to_end });
+            }
+        }
+
+        let mut res = None;
+        for f in formats {
+            match f {
+                Format::Expect(e) => {
+                    if !self.eat(e) {
+                        return Err(format!("expected {:?}", e));
+                    }
+                }
+                Format::Optional(e) => {
+                    self.eat(e);
+                }
+                Format::Parse { up_to: s, to_end } => {
+                    res = if to_end {
+                        Some(self.rest())
+                    } else {
+                        Some(self.take_until(|c| c == s))
+                    }
+                }
+            }
+        }
+
+        res.ok_or_else(|| "parse failed".to_string())
+    }
     /// Returns the remainder (after the offset).
     ///
     /// # Example
