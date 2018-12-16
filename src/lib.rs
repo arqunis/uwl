@@ -564,7 +564,7 @@ impl<'a> StringStream<'a> {
     /// Set the offset.
     /// Panics if the offset is in the middle of a unicode character, or exceeds the length of the input.
     pub fn set(&mut self, pos: usize) {
-        if pos >= self.src.len() {
+        if pos > self.src.len() {
             panic!("Position can't be longer than input");
         }
 
