@@ -419,6 +419,8 @@ impl<'a> StringStream<'a> {
     ///
     /// Whitespace between `{` and `}` is skipped.
     ///
+    /// If parsing does not succeed, this won't advance.
+    ///
     /// # Examples
     ///
     /// Get anything between html `h1` tags
@@ -479,6 +481,7 @@ impl<'a> StringStream<'a> {
             Some(Format::Expect(stream.take_until(|s| s == "(" || s == "{")))
         }
 
+        let pos = self.offset();
         let mut s = StringStream::new(fmt);
 
         let mut res = None;
@@ -501,7 +504,15 @@ impl<'a> StringStream<'a> {
             }
         }
 
-        res.ok_or_else(|| "parse failed".to_string())
+        match res {
+            Some(r) => Ok(r),
+            None => {
+                // Refresh the offset since we had failed.
+                unsafe { self.set_unchecked(pos) };
+
+                Err("parse failed".to_string())
+            },
+        }
     }
     /// Returns the remainder (after the offset).
     ///
