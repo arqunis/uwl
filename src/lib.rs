@@ -77,6 +77,8 @@
 //! }
 //! ```
 
+#![no_std]
+
 /// Brings over some `is_*` methods from `char` to `&str`.
 /// Look at [`char`]'s docs for more reference.
 ///
@@ -420,6 +422,7 @@ impl<'a> StringStream<'a> {
     /// Whitespace between `{` and `}` is skipped.
     ///
     /// If parsing does not succeed, this won't advance.
+    /// On `Err`, the expected string, or "parse failed", are returned.
     ///
     /// # Examples
     ///
@@ -445,7 +448,7 @@ impl<'a> StringStream<'a> {
     /// // the closing tag - </h2>
     /// assert_eq!(stream.parse("<(/){}>"), Ok("h2"));
     /// ```
-    pub fn parse(&mut self, fmt: &str) -> Result<&'a str, String> {
+    pub fn parse<'b>(&mut self, fmt: &'b str) -> Result<&'a str, &'b str> {
         enum Format<'a> {
             Expect(&'a str),
             Optional(&'a str),
@@ -489,7 +492,7 @@ impl<'a> StringStream<'a> {
             match fmt {
                 Format::Expect(e) => {
                     if !self.eat(e) {
-                        return Err(format!("expected {:?}", e));
+                        return Err(e);
                     }
                 }
                 Format::Optional(e) => {
@@ -510,10 +513,11 @@ impl<'a> StringStream<'a> {
                 // Refresh the offset since we had failed.
                 unsafe { self.set_unchecked(pos) };
 
-                Err("parse failed".to_string())
+                Err("parse failed")
             },
         }
     }
+
     /// Returns the remainder (after the offset).
     ///
     /// # Example
@@ -599,6 +603,8 @@ impl<'a> StringStream<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    extern crate std;
+    use self::std::vec::Vec;
 
     #[test]
     fn all_chars() {
