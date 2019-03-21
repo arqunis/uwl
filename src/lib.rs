@@ -121,7 +121,7 @@ impl<T: AsRef<str>> StrExt for T {
     fn is_diglet(&self) -> bool {
         self.as_ref()
             .chars()
-            .all(|c| c.is_alphanumeric() || c == '_')
+            .all(|c| c == '_' || c.is_alphanumeric())
     }
 }
 
@@ -161,6 +161,7 @@ impl<'a> StringStream<'a> {
     }
 
     // Find the bound positions of a character, whether ASCII or Unicode.
+    #[inline]
     fn char_pos(&self) -> Option<(usize, usize)> {
         if self.at_end() {
             return None;
@@ -180,6 +181,7 @@ impl<'a> StringStream<'a> {
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// ```
+    #[inline]
     pub fn current(&self) -> Option<&'a str> {
         let (start, end) = self.char_pos()?;
 
@@ -200,6 +202,7 @@ impl<'a> StringStream<'a> {
     /// stream.next();
     /// assert_eq!(stream.current(), Some("e"));
     /// ```
+    #[inline]
     pub fn next(&mut self) -> Option<&'a str> {
         let s = self.current()?;
         self.offset += s.len();
@@ -221,6 +224,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.advance(5), Some("world"));
     /// assert!(stream.at_end());
     /// ```
+    #[inline]
     pub fn advance(&mut self, much: usize) -> Option<&'a str> {
         if self.at_end() {
             None
@@ -249,7 +253,7 @@ impl<'a> StringStream<'a> {
     /// ```
     #[inline]
     pub fn eat(&mut self, m: &str) -> bool {
-        if self.peek_for(m.len()) == m {
+        if self.peek_for(m.chars().count()) == m {
             self.offset += m.len();
 
             true
@@ -259,7 +263,6 @@ impl<'a> StringStream<'a> {
     }
 
     /// Lookahead by x chars. Returns the char it landed on.
-    /// This does not actually modify, it just needs to temporarily advance.
     ///
     /// # Example
     ///
@@ -275,18 +278,11 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.current(), Some("h"));
     /// ```
     #[inline]
-    pub fn peek(&mut self, ahead: usize) -> Option<&'a str> {
-        if self.at_end() {
-            return None;
-        }
-
-        let (_, c) = self.peek_internal(ahead);
-
-        c
+    pub fn peek(&self, ahead: usize) -> Option<&'a str> {
+        self.peek_internal(ahead).1
     }
 
     /// Lookahead by x chars. Returns a substring up to the end it landed on.
-    /// This does not actually modify, it just needs to temporarily advance.
     ///
     /// # Example
     ///
@@ -311,18 +307,11 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.next(), Some("d"));
     /// ```
     #[inline]
-    pub fn peek_for(&mut self, ahead: usize) -> &'a str {
-        if self.at_end() {
-            return "";
-        }
-
-        let (s, _) = self.peek_internal(ahead);
-
-        s
+    pub fn peek_for(&self, ahead: usize) -> &'a str {
+        self.peek_internal(ahead).0
     }
 
     /// Lookahead by x chars. Returns a substring up to the end it landed on.
-    /// This does not actually modify, it just needs to temporarily advance.
     ///
     /// # Deprecated
     /// Use [`peek_for`] instead.
@@ -330,25 +319,25 @@ impl<'a> StringStream<'a> {
     /// [`peek_for`]: #method.peek_for
     #[inline]
     #[deprecated(note = "renamed to `peek_for`", since = "0.1.3")]
-    pub fn peek_str(&mut self, ahead: usize) -> &'a str {
+    pub fn peek_str(&self, ahead: usize) -> &'a str {
         self.peek_for(ahead)
     }
 
-    fn peek_internal(&mut self, ahead: usize) -> (&'a str, Option<&'a str>) {
+    fn peek_internal(&self, ahead: usize) -> (&'a str, Option<&'a str>) {
         if self.at_end() {
             return ("", None);
         }
 
-        let pos = self.offset;
+        let mut copy = self.clone();
+
+        let pos = copy.offset;
 
         for _ in 0..ahead {
-            self.next();
+            copy.next();
         }
 
-        let s = &self.src[pos..self.offset];
-        let c = self.current();
-
-        self.offset = pos;
+        let s = &self.src[pos..copy.offset];
+        let c = copy.current();
 
         (s, c)
     }
@@ -376,17 +365,18 @@ impl<'a> StringStream<'a> {
 
         let start = self.offset;
 
-        // To save up performance a bit below, we reuse the calculation done by this `current` call.
-        let mut s = self.current().unwrap();
+        while !self.at_end() {
+            let s = self.current().unwrap();
 
-        while !self.at_end() && f(s) {
+            if !f(s) {
+                break;
+            }
+
             self.offset += s.len();
 
             if self.at_end() {
                 return &self.src[start..];
             }
-
-            s = self.current().unwrap();
         }
 
         &self.src[start..self.offset]
