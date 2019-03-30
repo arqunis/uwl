@@ -566,6 +566,25 @@ impl<'a> StringStream<'a> {
         self.offset
     }
 
+    /// The provided source's length. Returns the amount of bytes.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("abc🍆");
+    /// assert_eq!(stream.len(), 7);
+    /// stream.next();
+    /// // Regardless of any modification method present on the stream,
+    /// // `len` always returns a constant.
+    /// assert_eq!(stream.len(), 7);
+    /// ```
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.src.len()
+    }
+
     /// Set the offset.
     /// Panics if the offset is in the middle of a unicode character, or exceeds the length of the input.
     pub fn set(&mut self, pos: usize) {
