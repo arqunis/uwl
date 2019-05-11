@@ -94,6 +94,8 @@ pub trait StrExt {
     fn is_whitespace(&self) -> bool;
     /// Does the string consist of letters, numbers or underscores? (A-Z; 0-9; _)
     fn is_diglet(&self) -> bool;
+    /// Does the string consist of letters, numbers or hyphens? (A-Z; 0-9; -)
+    fn is_kebab(&self) -> bool;
 }
 
 impl<T: AsRef<str>> StrExt for T {
@@ -122,6 +124,13 @@ impl<T: AsRef<str>> StrExt for T {
         self.as_ref()
             .chars()
             .all(|c| c == '_' || c.is_alphanumeric())
+    }
+
+    #[inline]
+    fn is_kebab(&self) -> bool {
+        self.as_ref()
+            .chars()
+            .all(|c| c == '-' || c.is_alphanumeric())
     }
 }
 
@@ -156,7 +165,7 @@ pub struct StringStream<'a> {
 impl<'a> StringStream<'a> {
     /// Create a new stream from a source.
     #[inline]
-    pub fn new(src: &'a str) -> Self {
+    pub const fn new(src: &'a str) -> Self {
         StringStream { src, offset: 0 }
     }
 
@@ -311,16 +320,42 @@ impl<'a> StringStream<'a> {
         self.peek_internal(ahead).0
     }
 
-    /// Lookahead by x chars. Returns a substring up to the end it landed on.
+    /// Lookahead for as long as `f` returns true. Returns a substring up to the end it landed on.
     ///
-    /// # Deprecated
-    /// Use [`peek_for`] instead.
+    /// # Example
     ///
-    /// [`peek_for`]: #method.peek_for
+    /// ```rust
+    /// use uwl::{StringStream, StrExt};
+    ///
+    /// let mut stream = StringStream::new("hello _wo_r_l_4d");
+    ///
+    /// assert_eq!(stream.peek_while(|s| s.is_alphabetic()), "hello");
+    /// assert_eq!(stream.rest(), "hello _wo_r_l_4d");
+    /// stream.take_while(|s| s.is_alphabetic());
+    /// stream.next();
+    /// assert_eq!(stream.peek_while(|s| s.is_diglet()), "_wo_r_l_4d");
+    /// assert_eq!(stream.rest(), "_wo_r_l_4d");
+    /// ```
     #[inline]
-    #[deprecated(note = "renamed to `peek_for`", since = "0.1.3")]
-    pub fn peek_str(&self, ahead: usize) -> &'a str {
-        self.peek_for(ahead)
+    pub fn peek_while(&self, f: impl Fn(&str) -> bool) -> &'a str {
+        self.clone().take_while(f)
+    }
+
+    /// Lookahead for as long as `f` does not return true. Returns a substring up to the end it landed on.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let mut stream = StringStream::new("hello!");
+    ///
+    /// assert_eq!(stream.peek_until(|s| s == "!"), "hello");
+    /// assert_eq!(stream.rest(), "hello!");
+    /// ```
+    #[inline]
+    pub fn peek_until(&self, f: impl Fn(&str) -> bool) -> &'a str {
+        self.peek_while(|s| !f(s))
     }
 
     fn peek_internal(&self, ahead: usize) -> (&'a str, Option<&'a str>) {
@@ -504,7 +539,7 @@ impl<'a> StringStream<'a> {
                 unsafe { self.set_unchecked(pos) };
 
                 Err("parse failed")
-            },
+            }
         }
     }
 
@@ -541,7 +576,7 @@ impl<'a> StringStream<'a> {
     /// ```
     #[inline]
     pub fn at_end(&self) -> bool {
-        self.offset >= self.src.len()
+        self.offset >= self.len()
     }
 
     /// The "offset"; the start of the current char.
@@ -562,8 +597,24 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.offset(), 6);
     /// ```
     #[inline]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
+    }
+
+    /// Returns the source the stream is operating on.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use uwl::StringStream;
+    ///
+    /// let stream = StringStream::new("Once upon a time... life");
+    ///
+    /// assert_eq!(stream.source(), "Once upon a time... life");
+    /// ```
+    #[inline]
+    pub const fn source(&self) -> &'a str {
+        self.src
     }
 
     /// The provided source's length. Returns the amount of bytes.
