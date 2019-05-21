@@ -400,18 +400,12 @@ impl<'a> StringStream<'a> {
 
         let start = self.offset;
 
-        while !self.at_end() {
-            let s = self.current().unwrap();
-
+        while let Some(s) = self.current() {
             if !f(s) {
                 break;
             }
 
             self.offset += s.len();
-
-            if self.at_end() {
-                return &self.src[start..];
-            }
         }
 
         &self.src[start..self.offset]
@@ -637,6 +631,7 @@ impl<'a> StringStream<'a> {
     }
 
     /// Set the offset.
+    ///
     /// Panics if the offset is in the middle of a unicode character, or exceeds the length of the input.
     pub fn set(&mut self, pos: usize) {
         if pos > self.src.len() {
@@ -657,6 +652,24 @@ impl<'a> StringStream<'a> {
     #[inline]
     pub unsafe fn set_unchecked(&mut self, pos: usize) {
         self.offset = pos;
+    }
+
+    /// Increment the offset by bytes.
+    ///
+    /// Panics if the offset appears to be in the middle of a unicode character.
+    pub fn increment(&mut self, bytes: usize) {
+        let incr = self.offset + bytes;
+        if !self.src.is_char_boundary(incr) {
+            panic!("offset in the middle of a character");
+        }
+
+        self.offset = incr;
+    }
+
+    /// Increment the offset by bytes without any checks.
+    #[inline]
+    pub unsafe fn increment_unchecked(&mut self, bytes: usize) {
+        self.offset += bytes;
     }
 }
 
