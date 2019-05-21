@@ -1,6 +1,6 @@
 [package]
 name = "uwl"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Alex M. M. <acdenissk69@gmail.com>"]
 description = "Unicode-aware stream of characters"
 repository = "https://github.com/acdenisSK/uwl"
