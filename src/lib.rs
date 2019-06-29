@@ -60,17 +60,17 @@
 //! fn main() {
 //!     let mut stream = StringStream::new("Hello, world! ...world? Hello?");
 //!
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Ident, "Hello"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Comma, ","));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Ident, "world"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Exclamation, "!"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Point, "."));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Point, "."));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Point, "."));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Ident, "world"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Question, "?"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Ident, "Hello"));
-//!     assert_eq!(lex(&mut stream).unwrap(), Token::new(TokenKind::Question, "?"));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Ident, "Hello")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Comma, ",")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Ident, "world")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Exclamation, "!")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Point, ".")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Point, ".")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Point, ".")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Ident, "world")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Question, "?")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Ident, "Hello")));
+//!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Question, "?")));
 //!
 //!     // Reached the end
 //!     assert_eq!(lex(&mut stream), None);
@@ -79,7 +79,13 @@
 
 #![no_std]
 
-/// Brings over some `is_*` methods from `char` to `&str`.
+#![doc(html_root_url = "https://docs.rs/uwl/*")]
+#![deny(rust_2018_idioms)]
+#![allow(clippy::should_implement_trait)]
+
+/// Brings over some `is_*` methods from `char` to `&str`,
+/// and some methods for identifiers/symbols.
+/// 
 /// Look at [`char`]'s docs for more reference.
 ///
 /// [`char`]: https://doc.rust-lang.org/stable/std/primitive.char.html
@@ -155,7 +161,7 @@ fn find_end(s: &str, i: usize) -> Option<usize> {
 /// This stream returns *chars* as `&str`s. In instances like [`take_while`], the `&str` refers to actual multi-char substrings (e.g "foo").
 ///
 /// [`take_while`]: #method.take_while
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct StringStream<'a> {
     offset: usize,
     /// The source this stream operates on.
@@ -628,6 +634,22 @@ impl<'a> StringStream<'a> {
     #[inline]
     pub fn len(&self) -> usize {
         self.src.len()
+    }
+
+    /// Is the provided source empty?
+    /// 
+    /// # Example
+    /// 
+    /// ```rust
+    /// use uwl::StringStream;
+    /// 
+    /// let stream = StringStream::new("");
+    /// 
+    /// assert!(stream.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Set the offset.
