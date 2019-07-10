@@ -5,7 +5,7 @@
 //! Example, lexing identifiers, numbers and some punctuation marks:
 //!
 //! ```rust
-//! use uwl::StringStream;
+//! use uwl::AsciiStream;
 //! use uwl::StrExt;
 //!
 //! #[derive(Debug, PartialEq)]
@@ -36,7 +36,7 @@
 //!     }
 //! }
 //!
-//! fn lex<'a>(stream: &mut StringStream<'a>) -> Option<Token<'a>> {
+//! fn lex<'a>(stream: &mut AsciiStream<'a>) -> Option<Token<'a>> {
 //!     if stream.at_end() {
 //!         return None;
 //!     }
@@ -58,7 +58,7 @@
 //! }
 //!
 //! fn main() {
-//!     let mut stream = StringStream::new("Hello, world! ...world? Hello?");
+//!     let mut stream = AsciiStream::new("Hello, world! ...world? Hello?");
 //!
 //!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Ident, "Hello")));
 //!     assert_eq!(lex(&mut stream), Some(Token::new(TokenKind::Comma, ",")));
@@ -83,9 +83,12 @@
 #![deny(rust_2018_idioms)]
 #![allow(clippy::should_implement_trait)]
 
+use core::fmt;
+use core::marker::PhantomData;
+
 /// Brings over some `is_*` methods from `char` to `&str`,
 /// and some methods for identifiers/symbols.
-/// 
+///
 /// Look at [`char`]'s docs for more reference.
 ///
 /// [`char`]: https://doc.rust-lang.org/stable/std/primitive.char.html
@@ -143,7 +146,7 @@ impl<T: AsRef<str>> StrExt for T {
 // Copied from stackoverflow
 // # https://stackoverflow.com/questions/43278245/find-next-char-boundary-index-in-string-after-char
 fn find_end(s: &str, i: usize) -> Option<usize> {
-    if i > s.len() {
+    if i >= s.len() {
         return None;
     }
 
@@ -155,34 +158,117 @@ fn find_end(s: &str, i: usize) -> Option<usize> {
     Some(end)
 }
 
-/// A stream of chars. Handles both ASCII and Unicode.
+/// How the stream should be constitualizing "chars"
+/// and how many bytes should it advance per "char".
 ///
-/// # Note
-/// This stream returns *chars* as `&str`s. In instances like [`take_while`], the `&str` refers to actual multi-char substrings (e.g "foo").
+/// There is [`Ascii`], which only advances the stream by one byte.
+/// Then there's the [`Unicode`] advancer that not only handles ASCII, but
+/// any utf-8 encoded character.
 ///
-/// [`take_while`]: #method.take_while
-#[derive(Debug, Clone, Default)]
-pub struct StringStream<'a> {
-    offset: usize,
-    /// The source this stream operates on.
-    pub src: &'a str,
+/// This trait is sealed. Outside the crate no type may implement this trait.
+///
+/// [`Ascii`]: struct.Ascii.html
+/// [`Unicode`]: struct.Unicode.html
+pub trait Advancer: sealed::Sealed {
+    #[doc(hidden)]
+    fn current(s: &str, offset: usize) -> Option<&str>;
 }
 
-impl<'a> StringStream<'a> {
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Ascii;
+
+impl Advancer for Ascii {
+    #[inline]
+    fn current(s: &str, offset: usize) -> Option<&str> {
+        if offset < s.len() {
+            Some(&s[offset..offset + 1])
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Unicode;
+
+impl Advancer for Unicode {
+    #[inline]
+    fn current(s: &str, offset: usize) -> Option<&str> {
+        let start = offset;
+        let end = find_end(s, offset)?;
+
+        Some(&s[start..end])
+    }
+}
+
+mod sealed {
+    pub trait Sealed {}
+
+    impl Sealed for super::Ascii {}
+    impl Sealed for super::Unicode {}
+}
+
+/// A stream of "chars". Handles ASCII and/or Unicode depending on the [`Advancer`]
+///
+/// # Note
+/// This stream's idea of a "char" is a string slice (`&str`).
+/// In some of the methods, this slice may only be wide as any ASCII (and/or Unicode) character can be.
+/// Others, such as [`take_while`], may return more than one "char".
+///
+/// [`Advancer`]: trait.Advancer.html
+/// [`take_while`]: #method.take_while
+pub struct Stream<'a, T: Advancer> {
+    offset: usize,
+    src: &'a str,
+    _marker: PhantomData<T>,
+}
+
+impl<T: Advancer> fmt::Debug for Stream<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stream")
+            .field("offset", &self.offset)
+            .field("src", &self.src)
+            .finish()
+    }
+}
+
+impl<T: Advancer> Default for Stream<'_, T> {
+    #[inline]
+    fn default() -> Self {
+        Stream {
+            offset: 0,
+            src: "",
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T: Advancer> Clone for Stream<'_, T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Stream {
+            offset: self.offset,
+            src: self.src,
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// A stream of chars. Handles both ASCII and Unicode.
+pub type UnicodeStream<'a> = Stream<'a, Unicode>;
+
+/// A stream of chars. Handles only ASCII.
+pub type AsciiStream<'a> = Stream<'a, Ascii>;
+
+impl<'a, T: Advancer> Stream<'a, T> {
     /// Create a new stream from a source.
     #[inline]
-    pub const fn new(src: &'a str) -> Self {
-        StringStream { src, offset: 0 }
-    }
-
-    // Find the bound positions of a character, whether ASCII or Unicode.
-    #[inline]
-    fn char_pos(&self) -> Option<(usize, usize)> {
-        if self.at_end() {
-            return None;
+    pub fn new(src: &'a str) -> Self {
+        Stream {
+            src,
+            offset: 0,
+            _marker: PhantomData,
         }
-
-        Some((self.offset, find_end(self.src, self.offset)?))
     }
 
     /// Fetch the current char.
@@ -190,17 +276,15 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let stream = StringStream::new("hello");
+    /// let stream = AsciiStream::new("hello");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// ```
     #[inline]
     pub fn current(&self) -> Option<&'a str> {
-        let (start, end) = self.char_pos()?;
-
-        Some(&self.src[start..end])
+        T::current(self.src, self.offset)
     }
 
     /// Advance to the next char
@@ -208,9 +292,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello");
+    /// let mut stream = AsciiStream::new("hello");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     ///
@@ -230,9 +314,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello world");
+    /// let mut stream = AsciiStream::new("hello world");
     ///
     /// assert_eq!(stream.advance(5), Some("hello"));
     /// stream.next();
@@ -257,9 +341,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello world");
+    /// let mut stream = AsciiStream::new("hello world");
     ///
     /// assert!(stream.eat("hello"));
     /// assert!(!stream.eat("not a space"));
@@ -282,9 +366,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello");
+    /// let mut stream = AsciiStream::new("hello");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// assert_eq!(stream.peek(1), Some("e"));
@@ -302,9 +386,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello world");
+    /// let mut stream = AsciiStream::new("hello world");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// assert_eq!(stream.peek_for(5), "hello");
@@ -331,9 +415,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::{StringStream, StrExt};
+    /// use uwl::{AsciiStream, StrExt};
     ///
-    /// let mut stream = StringStream::new("hello _wo_r_l_4d");
+    /// let mut stream = AsciiStream::new("hello _wo_r_l_4d");
     ///
     /// assert_eq!(stream.peek_while(|s| s.is_alphabetic()), "hello");
     /// assert_eq!(stream.rest(), "hello _wo_r_l_4d");
@@ -352,9 +436,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello!");
+    /// let mut stream = AsciiStream::new("hello!");
     ///
     /// assert_eq!(stream.peek_until(|s| s == "!"), "hello");
     /// assert_eq!(stream.rest(), "hello!");
@@ -388,12 +472,12 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
     /// // Import a few utility methods (for `is_alphabetic`)
     /// use uwl::StrExt;
     ///
-    /// let mut stream = StringStream::new("hello");
+    /// let mut stream = AsciiStream::new("hello");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// assert_eq!(stream.take_while(|s| s.is_alphabetic()), "hello");
@@ -422,9 +506,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("hello!");
+    /// let mut stream = AsciiStream::new("hello!");
     ///
     /// assert_eq!(stream.current(), Some("h"));
     /// assert_eq!(stream.take_until(|s| s == "!"), "hello");
@@ -454,9 +538,9 @@ impl<'a> StringStream<'a> {
     /// Get anything between html `h1` tags
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("<h1>hello world!</h1>");
+    /// let mut stream = AsciiStream::new("<h1>hello world!</h1>");
     ///
     /// assert_eq!(stream.parse("<h1>{}</h1>"), Ok("hello world!"));
     /// ```
@@ -464,9 +548,9 @@ impl<'a> StringStream<'a> {
     /// Parse html tags
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("<h2></h2>");
+    /// let mut stream = AsciiStream::new("<h2></h2>");
     ///
     /// // the opening tag - <h2>
     /// assert_eq!(stream.parse("<(/){}>"), Ok("h2"));
@@ -480,7 +564,7 @@ impl<'a> StringStream<'a> {
             Parse(Option<&'a str>),
         }
 
-        fn parse<'a>(stream: &mut StringStream<'a>) -> Option<Format<'a>> {
+        fn parse<'a, T: Advancer>(stream: &mut Stream<'a, T>) -> Option<Format<'a>> {
             if stream.at_end() {
                 return None;
             }
@@ -510,7 +594,7 @@ impl<'a> StringStream<'a> {
         }
 
         let pos = self.offset();
-        let mut s = StringStream::new(fmt);
+        let mut s = Stream::<T>::new(fmt);
 
         let mut res = None;
         while let Some(fmt) = parse(&mut s) {
@@ -548,9 +632,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("foo bar");
+    /// let mut stream = AsciiStream::new("foo bar");
     ///
     /// assert_eq!(stream.take_until(|s| s == " "), "foo");
     /// assert_eq!(stream.next(), Some(" "));
@@ -565,9 +649,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let mut stream = StringStream::new("a");
+    /// let mut stream = AsciiStream::new("a");
     ///
     /// assert!(!stream.at_end());
     /// stream.next();
@@ -584,9 +668,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::UnicodeStream;
     ///
-    /// let mut stream = StringStream::new("a 🍆");
+    /// let mut stream = UnicodeStream::new("a 🍆");
     ///
     /// assert_eq!(stream.offset(), 0);
     /// stream.next();
@@ -597,7 +681,7 @@ impl<'a> StringStream<'a> {
     /// assert_eq!(stream.offset(), 6);
     /// ```
     #[inline]
-    pub const fn offset(&self) -> usize {
+    pub fn offset(&self) -> usize {
         self.offset
     }
 
@@ -606,14 +690,14 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::AsciiStream;
     ///
-    /// let stream = StringStream::new("Once upon a time... life");
+    /// let stream = AsciiStream::new("Once upon a time... life");
     ///
     /// assert_eq!(stream.source(), "Once upon a time... life");
     /// ```
     #[inline]
-    pub const fn source(&self) -> &'a str {
+    pub fn source(&self) -> &'a str {
         self.src
     }
 
@@ -622,9 +706,9 @@ impl<'a> StringStream<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use uwl::StringStream;
+    /// use uwl::UnicodeStream;
     ///
-    /// let mut stream = StringStream::new("abc🍆");
+    /// let mut stream = UnicodeStream::new("abc🍆");
     /// assert_eq!(stream.len(), 7);
     /// stream.next();
     /// // Regardless of any modification method present on the stream,
@@ -637,15 +721,16 @@ impl<'a> StringStream<'a> {
     }
 
     /// Is the provided source empty?
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust
-    /// use uwl::StringStream;
-    /// 
-    /// let stream = StringStream::new("");
-    /// 
+    /// use uwl::AsciiStream;
+    ///
+    /// let stream = AsciiStream::new("");
+    ///
     /// assert!(stream.is_empty());
+    /// assert_eq!(stream.source(), "");
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -654,17 +739,10 @@ impl<'a> StringStream<'a> {
 
     /// Set the offset.
     ///
-    /// Panics if the offset is in the middle of a unicode character, or exceeds the length of the input.
+    /// Panics if the offset is in the middle of a unicode character.
     pub fn set(&mut self, pos: usize) {
-        if pos > self.src.len() {
-            panic!("Position can't be longer than input");
-        }
-
         if !self.src.is_char_boundary(pos) {
-            panic!(
-                "Invalid position. Cannot set the pos\
-                 to be in the middle of a unicode character"
-            );
+            panic!("offset in the middle of a unicode character");
         }
 
         self.offset = pos;
@@ -682,7 +760,7 @@ impl<'a> StringStream<'a> {
     pub fn increment(&mut self, bytes: usize) {
         let incr = self.offset + bytes;
         if !self.src.is_char_boundary(incr) {
-            panic!("offset in the middle of a character");
+            panic!("offset in the middle of a unicode character");
         }
 
         self.offset = incr;
@@ -695,6 +773,28 @@ impl<'a> StringStream<'a> {
     }
 }
 
+impl<'a> AsciiStream<'a> {
+    /// Convert this ascii stream into a unicode stream.
+    pub fn into_unicode(self) -> UnicodeStream<'a> {
+        UnicodeStream {
+            offset: self.offset,
+            src: self.src,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a> UnicodeStream<'a> {
+    /// Convert this unicode stream into an ascii stream.
+    pub fn into_ascii(self) -> AsciiStream<'a> {
+        AsciiStream {
+            offset: self.offset,
+            src: self.src,
+            _marker: PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -704,7 +804,7 @@ mod tests {
     #[test]
     fn all_chars() {
         const STRING: &str = "hello a b c ! ?👀👁!!!";
-        let mut s = StringStream::new(STRING);
+        let mut s = UnicodeStream::new(STRING);
 
         let mut v = Vec::with_capacity(STRING.len());
 
@@ -742,7 +842,7 @@ mod tests {
     fn peek() {
         const STRING: &str = "// a comment!";
 
-        let mut s = StringStream::new(STRING);
+        let mut s = AsciiStream::new(STRING);
 
         assert_eq!(s.current(), Some("/"));
         // Forsee into the future. By one char.
@@ -752,6 +852,6 @@ mod tests {
         assert_eq!(s.next(), Some("/"));
         assert_eq!(s.next(), Some("/"));
 
-        assert_eq!(&s.src[s.offset()..], " a comment!")
+        assert_eq!(&s.src[s.offset()..], " a comment!");
     }
 }
