@@ -782,6 +782,11 @@ impl<'a> AsciiStream<'a> {
             _marker: PhantomData,
         }
     }
+
+    /// Convert this ascii stream into a unicode stream.
+    pub fn to_unicode(&self) -> UnicodeStream<'a> {
+        self.clone().into_unicode()
+    }
 }
 
 impl<'a> UnicodeStream<'a> {
@@ -792,6 +797,12 @@ impl<'a> UnicodeStream<'a> {
             src: self.src,
             _marker: PhantomData,
         }
+    }
+
+    /// Convert this unicode stream into an ascii stream.
+    #[inline]
+    pub fn to_ascii(&self) -> AsciiStream<'a> {
+        self.clone().into_ascii()
     }
 }
 
