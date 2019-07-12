@@ -787,6 +787,19 @@ impl<'a> AsciiStream<'a> {
     pub fn to_unicode(&self) -> UnicodeStream<'a> {
         self.clone().into_unicode()
     }
+
+    /// Temporarly switch "char" state to [`Unicode`] before applying the stream's state to the current stream.
+    ///
+    /// [`Unicode`]: struct.Unicode.html
+    pub fn with_unicode<T>(&mut self, f: impl FnOnce(&mut UnicodeStream<'a>) -> T) -> T {
+        let mut stream = self.to_unicode();
+
+        let res = f(&mut stream);
+
+        self.offset = stream.offset;
+
+        res
+    }
 }
 
 impl<'a> UnicodeStream<'a> {
@@ -803,6 +816,19 @@ impl<'a> UnicodeStream<'a> {
     #[inline]
     pub fn to_ascii(&self) -> AsciiStream<'a> {
         self.clone().into_ascii()
+    }
+
+    /// Temporarly switch "char" state to [`Ascii`] before applying the stream's state to the current stream.
+    ///
+    /// [`Ascii`]: struct.Ascii.html
+    pub fn with_ascii<T>(&mut self, f: impl FnOnce(&mut AsciiStream<'a>) -> T) -> T {
+        let mut stream = self.to_ascii();
+
+        let res = f(&mut stream);
+
+        self.offset = stream.offset;
+
+        res
     }
 }
 
