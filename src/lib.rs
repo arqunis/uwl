@@ -171,7 +171,7 @@ fn find_end(s: &str, i: usize) -> Option<usize> {
 /// [`Unicode`]: struct.Unicode.html
 pub trait Advancer: sealed::Sealed {
     #[doc(hidden)]
-    fn current(s: &str, offset: usize) -> Option<&str>;
+    fn current(s: &str, offset: usize) -> Option<usize>;
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -179,9 +179,9 @@ pub struct Ascii;
 
 impl Advancer for Ascii {
     #[inline]
-    fn current(s: &str, offset: usize) -> Option<&str> {
+    fn current(s: &str, offset: usize) -> Option<usize> {
         if offset < s.len() {
-            Some(&s[offset..offset + 1])
+            Some(offset + 1)
         } else {
             None
         }
@@ -193,11 +193,8 @@ pub struct Unicode;
 
 impl Advancer for Unicode {
     #[inline]
-    fn current(s: &str, offset: usize) -> Option<&str> {
-        let start = offset;
-        let end = find_end(s, offset)?;
-
-        Some(&s[start..end])
+    fn current(s: &str, offset: usize) -> Option<usize> {
+        find_end(s, offset)
     }
 }
 
@@ -235,11 +232,7 @@ impl<T: Advancer> fmt::Debug for Stream<'_, T> {
 impl<T: Advancer> Default for Stream<'_, T> {
     #[inline]
     fn default() -> Self {
-        Stream {
-            offset: 0,
-            src: "",
-            _marker: PhantomData,
-        }
+        Stream::new("")
     }
 }
 
@@ -284,7 +277,10 @@ impl<'a, T: Advancer> Stream<'a, T> {
     /// ```
     #[inline]
     pub fn current(&self) -> Option<&'a str> {
-        T::current(self.src, self.offset)
+        let start = self.offset;
+        let end = T::current(self.src, self.offset)?;
+
+        Some(&self.src[start..end])
     }
 
     /// Advance to the next char
@@ -619,7 +615,7 @@ impl<'a, T: Advancer> Stream<'a, T> {
         match res {
             Some(r) => Ok(r),
             None => {
-                // Refresh the offset since we had failed.
+                // Refresh the offset since we have failed.
                 unsafe { self.set_unchecked(pos) };
 
                 Err("parse failed")
@@ -641,7 +637,7 @@ impl<'a, T: Advancer> Stream<'a, T> {
     /// assert_eq!(stream.rest(), "bar");
     #[inline]
     pub fn rest(&self) -> &'a str {
-        &self.src[self.offset()..]
+        &self.src[self.offset..]
     }
 
     /// Determines the end of the input.
@@ -741,9 +737,7 @@ impl<'a, T: Advancer> Stream<'a, T> {
     ///
     /// Panics if the offset is in the middle of a unicode character.
     pub fn set(&mut self, pos: usize) {
-        if !self.src.is_char_boundary(pos) {
-            panic!("offset in the middle of a unicode character");
-        }
+        assert!(!self.src.is_char_boundary(pos), "offset in the middle of a unicode character");
 
         self.offset = pos;
     }
@@ -759,9 +753,8 @@ impl<'a, T: Advancer> Stream<'a, T> {
     /// Panics if the offset appears to be in the middle of a unicode character.
     pub fn increment(&mut self, bytes: usize) {
         let incr = self.offset + bytes;
-        if !self.src.is_char_boundary(incr) {
-            panic!("offset in the middle of a unicode character");
-        }
+
+        assert!(!self.src.is_char_boundary(incr), "offset in the middle of a unicode character");
 
         self.offset = incr;
     }
@@ -775,17 +768,19 @@ impl<'a, T: Advancer> Stream<'a, T> {
 
 impl<'a> AsciiStream<'a> {
     /// Convert this ascii stream into a unicode stream.
+    #[inline]
     pub fn into_unicode(self) -> UnicodeStream<'a> {
+        self.to_unicode()
+    }
+
+    /// Convert this ascii stream into a unicode stream.
+    #[inline]
+    pub fn to_unicode(&self) -> UnicodeStream<'a> {
         UnicodeStream {
             offset: self.offset,
             src: self.src,
             _marker: PhantomData,
         }
-    }
-
-    /// Convert this ascii stream into a unicode stream.
-    pub fn to_unicode(&self) -> UnicodeStream<'a> {
-        self.clone().into_unicode()
     }
 
     /// Temporarly switch "char" state to [`Unicode`] before applying the stream's state to the current stream.
@@ -804,18 +799,19 @@ impl<'a> AsciiStream<'a> {
 
 impl<'a> UnicodeStream<'a> {
     /// Convert this unicode stream into an ascii stream.
+    #[inline]
     pub fn into_ascii(self) -> AsciiStream<'a> {
-        AsciiStream {
-            offset: self.offset,
-            src: self.src,
-            _marker: PhantomData,
-        }
+        self.to_ascii()
     }
 
     /// Convert this unicode stream into an ascii stream.
     #[inline]
     pub fn to_ascii(&self) -> AsciiStream<'a> {
-        self.clone().into_ascii()
+        AsciiStream {
+            offset: self.offset,
+            src: self.src,
+            _marker: PhantomData,
+        }
     }
 
     /// Temporarly switch "char" state to [`Ascii`] before applying the stream's state to the current stream.
