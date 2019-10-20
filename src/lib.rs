@@ -98,14 +98,18 @@ pub trait CharExt: Copy {
     fn is_ident_start(self) -> bool;
     /// Is the character fit for continuing the identifier? (A-Z; 0-9; _)
     fn is_ident_continue(self) -> bool;
+    /// Is the character fit for an identifier? (A-Z; 0-9; _) 
+    fn is_ident(self) -> bool;
     /// Is the character fit for continuing the identifier in kebab-case? (A-Z; 0-9; -)
     fn is_kebab_continue(self) -> bool;
+    /// Is the character fit for an identifier in kebab-case? (A-Z; 0-9; -)
+    fn is_kebab(self) -> bool;
 }
 
 impl CharExt for char {
     #[inline]
     fn is_ident_start(self) -> bool {
-        self.is_ascii_alphabetic()
+        self.is_ascii_alphanumeric()
     }
 
     #[inline]
@@ -116,6 +120,16 @@ impl CharExt for char {
     #[inline]
     fn is_kebab_continue(self) -> bool {
         self == '-' || self.is_ident_start()
+    }
+
+    #[inline]
+    fn is_ident(self) -> bool {
+        self.is_ident_continue()
+    }
+
+    #[inline]
+    fn is_kebab(self) -> bool {
+        self.is_kebab_continue()
     }
 }
 
@@ -379,7 +393,7 @@ impl<'a> Stream<'a> {
     /// assert_eq!(stream.rest(), "hello _wo_r_l_4d");
     /// stream.take_while(|s| s.is_alphabetic());
     /// stream.next();
-    /// assert_eq!(stream.peek_while(|s| s.is_diglet()), "_wo_r_l_4d");
+    /// assert_eq!(stream.peek_while(|s| s.is_ident()), "_wo_r_l_4d");
     /// assert_eq!(stream.rest(), "_wo_r_l_4d");
     /// ```
     #[inline]
@@ -436,9 +450,12 @@ impl<'a> Stream<'a> {
     #[inline]
     pub fn peek_for(&self, mut much: usize) -> &'a str {
         self.peek_while(|_| {
-            let b = 0 < much;
-            much -= 1;
-            b
+            if 0 < much {
+                much -= 1;
+                true
+            } else {
+                false
+            }
         })
     }
 
@@ -460,9 +477,12 @@ impl<'a> Stream<'a> {
     #[inline]
     pub fn advance(&mut self, mut much: usize) -> &'a str {
         self.take_while(|_| {
-            let b = 0 < much;
-            much -= 1;
-            b
+            if 0 < much {
+                much -= 1;
+                true
+            } else {
+                false
+            }
         })
     }
 
