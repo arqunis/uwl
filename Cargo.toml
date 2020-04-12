@@ -2,7 +2,7 @@
 name = "uwl"
 version = "0.5.1"
 authors = ["Alex M. M. <acdenissk69@gmail.com>"]
-description = "Unicode-aware stream of characters"
+description = "A management stream for bytes and characters"
 repository = "https://github.com/acdenisSK/uwl"
 edition = "2018"
 license = "MIT OR Apache-2.0"

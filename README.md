@@ -1,6 +1,9 @@
 # uwl
 
-A crate for providing a simple way of streaming over characters without giving a damn about unicode.
+A Unicode-aware lexer. As it was called in its initial form.
+
+This crate supplies a stream over a string source for manipulating its byte contents, either directly with the bytes themselves,
+or through their Unicode codepoint character representations.
 
 ##### License
 
